@@ -16,7 +16,7 @@ inherited from upstream and unmodified.
 | `src/boltz/model/modules/restraints.py` | Modified | Dispatches the torsional term alongside the published restraints; adds `pose_start_sigma` |
 | `src/boltz/data/parse/schema.py` | Modified | Parses `pose_w_torsion` and `pose_start_sigma` from the input YAML |
 | `configs/` | New | Inference configurations for the 5bzl and 8sge evaluation systems, one per condition |
-| `scripts/` | New | Evaluation pipeline: system selection, structure extraction, config generation, alignment and aggregation |
+| `analysis/` | New | Evaluation pipeline: system selection, structure extraction, config generation, alignment and aggregation |
 
 ## Method
 
