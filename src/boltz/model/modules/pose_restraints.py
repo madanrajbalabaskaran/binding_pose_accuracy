@@ -1,9 +1,6 @@
 """
 pose_restraints.py
 
-Scaffold for pose-acting restraint terms to extend the boltz_ext restraint
-machinery (Ishitani & Moriwaki, ACS Omega 2025).
-
 DESIGN INTENT
 -------------
 The published restraints (chiral volume, bond length, bond angle) act on LOCAL
@@ -45,23 +42,14 @@ mirroring how make_bond() in schema.py already handles this:
 Restraints.make_pose_torsion_restraints() (in restraints.py) does this
 translation via idx_map, and silently skips any quad touching an atom not
 present in idx_map (e.g. filtered/absent atoms) -- exactly like the existing
-bond-restraint loop in schema.py does. Do NOT strip or add hydrogens on the
-mol passed into build_torsion_prior(); leave it exactly as the caller's
-ref_mol, so quad indices line up with idx_map's keys.
+bond-restraint loop in schema.py does. build_torsion_prior() adds and removes
+hydrogens on an internal copy only; the caller's ref_mol is never modified, and
+because RDKit appends hydrogens after the heavy atoms and they are stripped
+again before torsion enumeration, the returned quad indices line up with
+idx_map's keys..
 
-IMPORTANT CAVEATS
------------------
-* This is a SCAFFOLD. It is not guaranteed to improve pose RMSD; that is the
-  empirical question the dissertation tests. Treat w_torsion and start_sigma
-  as hyperparameters to sweep, with unmodified Boltz R as baseline.
-* Pose-acting restraints are sensitive to WHEN they fire during reverse
-  diffusion. Too late (very low sigma) and the ligand is already placed;
-  too early and the term fights the denoiser. Sweep a separate
-  pose_start_sigma from the geometry restraints' start_sigma.
-* Always co-report chirality/bond/angle metrics alongside pose RMSD, to show
-  the pose term does not regress what the existing restraints already fixed.
-
-Author: (your name) -- MSc Bioinformatics dissertation scaffold
+---------------------
+Author: Madanraj Balabaskaran -- MSc Bioinformatics dissertation
 """
 
 from __future__ import annotations
@@ -76,9 +64,7 @@ except ImportError:  # allow import on cluster nodes without RDKit in the path
     _HAVE_RDKIT = False
 
 
-# ----------------------------------------------------------------------------
 # Torsion prior from an RDKit conformer ensemble
-# ----------------------------------------------------------------------------
 
 def _enumerate_rotatable_torsions(mol):
     """Return list of (i, j, k, l) atom-index quadruples for rotatable bonds.
@@ -109,10 +95,13 @@ def build_torsion_prior(ligand_rdkit_mol, n_conformers=50, random_seed=0xC0FFEE)
     """Generate an ensemble of low-energy conformers and record, for each
     rotatable torsion, the set of dihedral values it adopts.
 
-    ligand_rdkit_mol is used exactly as passed -- this function does not
-    add or strip hydrogens, so returned quad indices remain in the caller's
-    own RDKit index space (see module docstring on ATOM INDEX HANDLING).
-
+    
+    Hydrogens are added before embedding, since MMFF94 requires them for
+    correct atom typing, and stripped again before torsion enumeration so that
+    the returned quad indices refer to heavy atoms only. Those indices are
+    therefore valid in the caller's own index space ( ATOM INDEX HANDLING
+    in the module docstring).
+    -------
     Returns
     -------
     quads : list[tuple[int,int,int,int]]
@@ -126,7 +115,7 @@ def build_torsion_prior(ligand_rdkit_mol, n_conformers=50, random_seed=0xC0FFEE)
     if not _HAVE_RDKIT:
         raise RuntimeError("RDKit required to build the torsion prior.")
 
-    # Work on a copy so we never mutate the caller's mol in place.
+   
     mol = Chem.Mol(ligand_rdkit_mol)
     mol = Chem.AddHs(mol)
     params = AllChem.ETKDGv3()
@@ -134,12 +123,7 @@ def build_torsion_prior(ligand_rdkit_mol, n_conformers=50, random_seed=0xC0FFEE)
     params.numThreads = 0
     cids = AllChem.EmbedMultipleConfs(mol, numConfs=n_conformers, params=params)
 
-    # MMFF minimize so the ensemble represents low-energy conformers.
-    # MMFF energies are less reliable without explicit hydrogens; if that
-    # matters for your evaluation, minimize a separately-Hs-added copy for
-    # embedding quality only, then transfer coordinates back before reading
-    # dihedrals. Flagged here as a documented follow-up rather than silently
-    # changing this function's index semantics.
+   
     try:
         res = AllChem.MMFFOptimizeMoleculeConfs(
             mol, numThreads=0, maxIters=2000)
@@ -148,8 +132,6 @@ def build_torsion_prior(ligand_rdkit_mol, n_conformers=50, random_seed=0xC0FFEE)
             print('[pose_restraints] WARNING: %d/%d confs '
                   'not converged' % (n_bad, len(res)))
     except Exception:
-        # MMFF may behave poorly without explicit Hs for some ligands;
-        # embedding geometry alone is still a usable (if rougher) prior.
         print('[pose_restraints] WARNING: MMFF failed; '
               'using embedding geometry only')
 
@@ -178,11 +160,6 @@ def _dihedral(p0, p1, p2, p3):
     x = np.dot(v, w)
     y = np.dot(np.cross(b1, v), w)
     return np.arctan2(y, x)
-
-
-# ----------------------------------------------------------------------------
-# Runtime restraint object -- mirrors AngleData / ChiralData's contract
-# ----------------------------------------------------------------------------
 
 class PoseTorsionData:
     """Runtime torsion restraint for ONE rotatable bond.
@@ -226,9 +203,6 @@ class PoseTorsionData:
         (same shape as crds). Scoped to only this quad's 4 atoms -- cheap
         (24 calc() evaluations per quad per step), unlike differentiating
         the whole ligand at once.
-
-        NOTE: mutates `crds` transiently (perturb, evaluate, restore) but
-        leaves it unchanged on return.
         """
         i, j, k, l = self.aid
         for idx in (i, j, k, l):
@@ -240,12 +214,6 @@ class PoseTorsionData:
                 crds[idx, dim] += h  # restore
                 grad[idx, dim] += (ep - em) / (2 * h)
 
-
-# ----------------------------------------------------------------------------
-# Optional follow-up: protein-ligand clash term (NOT wired into restraints.py
-# yet -- needs protein coordinates threaded through schema.py's parse call
-# site first). Left here so the extension point is obvious later.
-# ----------------------------------------------------------------------------
 
 def clash_energy(lig_coords, lig_radii,
                  prot_coords, prot_radii,
@@ -273,26 +241,13 @@ def clash_energy(lig_coords, lig_radii,
                 total += (drel_threshold - drel) ** 2
     return total
 
-
-# ----------------------------------------------------------------------------
-# Self-test (runs only if RDKit is available). Exercises build_torsion_prior
-# and PoseTorsionData directly -- does NOT touch restraints.py/schema.py,
-# since those require the full Boltz runtime (feats, idx_map, etc.) that
-# isn't available standalone.
-# ----------------------------------------------------------------------------
-
 if __name__ == "__main__":
     if not _HAVE_RDKIT:
         print("RDKit not available; skipping self-test.")
     else:
-        # Ibuprofen: has rotatable bonds, good smoke test for the torsion term.
         mol = Chem.MolFromSmiles("CC(C)Cc1ccc(cc1)C(C)C(=O)O")
         quads, allowed = build_torsion_prior(mol, n_conformers=20)
         print("n rotatable torsions:", len(quads))
-
-        # Use one embedded conformer's coords as a stand-in for step coords,
-        # and fake up local indices as identity (i.e. pretend idx_map is a
-        # no-op) purely to exercise PoseTorsionData end to end.
         m = Chem.Mol(mol)
         AllChem.EmbedMolecule(m, AllChem.ETKDGv3())
         conf = m.GetConformer()
