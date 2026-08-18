@@ -34,8 +34,22 @@ reverse diffusion, controlled by a noise-level threshold.
 Restraint behaviour is controlled from the ligand block of the input YAML:
 
 ```yaml
-pose_w_torsion: 1
-pose_start_sigma: 1.0
+- ligand:
+      id: B
+      smiles: '<SMILES>'
+      chiral_restraints: true
+      pose_restraints: true
+      pose_w_torsion: 1.0
+restraints_config:
+  angle:
+    weight: 1
+  bond:
+    weight: 1
+  chiral:
+    weight: 1
+  start_sigma: 1.0
+  gpu: false
+  verbose: true
 ```
 
 SMILES strings must be written as single-quoted YAML scalars. Double-quoted
