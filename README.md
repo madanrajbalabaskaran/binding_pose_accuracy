@@ -26,6 +26,26 @@ Restraint behaviour is controlled from the ligand block of the input YAML:
 pose_w_torsion: 1
 pose_start_sigma: 1.0
 ```
+Later PyTorch versions caused segmentation faults on import. Install in editable
+mode (`pip install -e .`).
+
+## Notes
+
+`pose_restraints.py` contains the corrected conformer-ensemble construction
+(`maxIters=2000`, explicit hydrogens added before embedding and removed before
+torsion enumeration). The uncorrected results reported in the accompanying
+manuscript were produced with an earlier version of this file and cannot be
+reproduced from this revision.
+
+## Licence and attribution
+
+Licensed under the terms of the upstream `LICENSE`. The restraint-guided
+inference framework is the work of Ishitani and Moriwaki; the underlying model
+is Boltz-1 (Wohlwend et al., 2024).
+
+
+
+
 
 Run inference with:
 
