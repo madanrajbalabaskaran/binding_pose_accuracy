@@ -1,0 +1,23 @@
+sequences:
+  - protein:
+      id: A
+      sequence: "MNQIDLNVTCRYAGVFHVEKNGRYSISRTEAADLCQAFNSTLPTMDQMKLALSKGFETCRYGFIEGNVVIPRIHPNAICAANHTGVYILVTSNTSHYDTYCFNASAPPEEDCTSVTDLPNSFDGPVTITIVNRDGTRYSKKGEYRTHQEDI"
+      msa: empty
+  - ligand:
+      id: B
+      smiles: "COC(=O)CCN1CCc2cccc(N)c2C1"
+      chiral_restraints: false
+      pose_restraints: false
+      pose_w_torsion: 0.0
+restraints_config:
+  angle:
+    weight: 0
+  bond:
+    weight: 0
+  chiral:
+    weight: 0
+  pose:
+    w_torsion: 0.0
+  start_sigma: 1.0
+  gpu: false
+  verbose: true

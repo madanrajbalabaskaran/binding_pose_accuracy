@@ -210,6 +210,8 @@ def parse_ccd_residue(
     ref_mol: Mol,
     res_idx: int,
     ch_rest: bool = False,
+    pose_rest: bool = False,
+    pose_w_torsion: float = 1.0,
 ) -> Optional[ParsedResidue]:
     """Parse an MMCIF ligand.
 
@@ -340,6 +342,13 @@ def parse_ccd_residue(
     if ch_rest and len(chiral_aids) > 0:
         # Build angle restraints
         restr.make_angle_restraints(ref_mol, conformer, atoms)
+    if ch_rest and len(chiral_aids) > 0:
+        restr.make_angle_restraints(ref_mol, conformer, atoms)
+
+    if pose_rest:
+        restr.make_pose_torsion_restraints(
+            ref_mol, conformer, atoms, idx_map, w_torsion=pose_w_torsion
+        )
 
     unk_prot_id = const.unk_token_ids["PROTEIN"]
     return ParsedResidue(
@@ -696,20 +705,21 @@ def parse_boltz_schema(  # noqa: C901, PLR0915, PLR0912
             seq = items[0][entity_type]["ccd"]
             if isinstance(seq, str):
                 seq = [seq]
-
+            pose_rest = items[0][entity_type].get("pose_restraints", False)
+            pose_w_torsion = items[0][entity_type].get("pose_w_torsion", 1.0)
             residues = []
             for code in seq:
                 if code not in ccd:
                     msg = f"CCD component {code} not found!"
                     raise ValueError(msg)
-
                 # Parse residue
                 residue = parse_ccd_residue(
                     name=code,
                     ref_mol=ccd[code],
                     res_idx=0,
+                    pose_rest=pose_rest,
+                    pose_w_torsion=pose_w_torsion,
                 )
-                residues.append(residue)
 
             # Create multi ligand chain
             parsed_chain = ParsedChain(
@@ -723,7 +733,9 @@ def parse_boltz_schema(  # noqa: C901, PLR0915, PLR0912
             mol = AllChem.AddHs(mol)
             ch_rest = False
             if "chiral_restraints" in items[0][entity_type]:
-                ch_rest = items[0][entity_type]["chiral_restraints"] 
+                ch_rest = items[0][entity_type]["chiral_restraints"]
+            pose_rest = items[0][entity_type].get("pose_restraints", False)          
+            pose_w_torsion = items[0][entity_type].get("pose_w_torsion", 1.0) 
             if ch_rest:
                 print(f"apply {ch_rest=} for mol: {Chem.MolToSmiles(Chem.RemoveHs(mol))}")
 
@@ -743,6 +755,8 @@ def parse_boltz_schema(  # noqa: C901, PLR0915, PLR0912
                 ref_mol=mol_no_h,
                 res_idx=0,
                 ch_rest=ch_rest,
+                pose_rest=pose_rest,
+                pose_w_torsion=pose_w_torsion,
             )
             parsed_chain = ParsedChain(
                 entity=entity_id,

@@ -1,0 +1,29 @@
+# Evaluation config — PLINDER system 5bzl__1__1.A__1.D
+# Protein: 5bzl chain A (151 residues)
+# Ligand: CCD code 4WO, SMILES from PLINDER annotation table
+# Purpose: real ground-truth-backed pose accuracy evaluation (RMSD/PoseBusters
+# against system.cif), unlike pose_smoketest.yaml which used a non-physical
+# myoglobin/ibuprofen pairing purely to validate the restraint code path.
+sequences:
+  - protein:
+      id: A
+      sequence: "MNQIDLNVTCRYAGVFHVEKNGRYSISRTEAADLCQAFNSTLPTMDQMKLALSKGFETCRYGFIEGNVVIPRIHPNAICAANHTGVYILVTSNTSHYDTYCFNASAPPEEDCTSVTDLPNSFDGPVTITIVNRDGTRYSKKGEYRTHQEDI"
+      msa: empty
+  - ligand:
+      id: B
+      smiles: "COC(=O)CCN1CCc2cccc(N)c2C1"
+      chiral_restraints: true
+      pose_restraints: true
+      pose_w_torsion: 1.0
+restraints_config:
+  angle:
+    weight: 1
+  bond:
+    weight: 1
+  chiral:
+    weight: 1
+  pose:
+    w_torsion: 1.0
+  start_sigma: 1.0
+  gpu: false
+  verbose: true

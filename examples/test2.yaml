@@ -1,0 +1,20 @@
+# boltz_ext inference config — PLINDER system 101m__1__1.A__1.C_1.D
+# Protein: sperm whale myoglobin (chain 1.A)
+# Ligand:  HEM (heme, chain 1.C). NBN additive (chain 1.D) intentionally omitted.
+sequences:
+  - protein:
+      id: A
+      sequence: "MVLSEGEWQLVLHVWAKVEADVAGHGQDILIRLFKSHPETLEKFDRVKHLKTEAEMKASEDLKKHGVTVLTALGAILKKKGHHEAELKPLAQSHATKHKIPIKYLEFISEAIIHVLHSRHPGNFGADAQGAMNKALELFRKDIAAKYKELGYQG"
+  - ligand:
+      id: B 
+      ccd: "HEM"
+      chiral_restraints: true
+restraints_config:
+  angle:
+    weight: 1
+  bond:
+    weight: 1
+  chiral:
+    weight: 1
+  start_sigma: 1.0
+  gpu: true

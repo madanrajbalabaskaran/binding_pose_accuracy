@@ -29,6 +29,7 @@ class Restraints:
         self.chiral_data = []
         self.bond_data = []
         self.angle_data = []
+        self.pose_data = []
         self.sites = []
         self.torch_impl = None
 
@@ -41,12 +42,14 @@ class Restraints:
         # self.start_step = config.get("start_step", 50)
         # self.end_step = config.get("end_step", 999)
         self.start_sigma = config.get("start_sigma", 1.0)
+        self.pose_start_sigma = config.get(
+            "pose_start_sigma", self.start_sigma)
 
         self.chiral_config = config.get("chiral", {})
         self.bond_config = config.get("bond", {})
         self.angle_config = config.get("angle", {})
         self.vdw_config = config.get("vdw", {})
-
+        self.pose_config = config.get("pose" , {})
         self.method = self.config.get("method", "CG")
         self.max_iter = int(self.config.get("max_iter", "100"))
 
@@ -175,7 +178,27 @@ class Restraints:
                     continue
 
             self.make_angle(ai, aj, ak, mol, conf, atoms)
+    def make_pose_torsion_restraints(self, mol, conf, atoms, idx_map,
+                                      w_torsion: float = 1.0,
+                                      n_conformers: int = 50) -> None:
+        """Build pose-acting torsion restraints from an RDKit conformer
+        ensemble prior. Mirrors make_angle_restraints; atom indices go
+        through idx_map exactly like the bond-restraint loop in schema.py
+        does, so any atom absent from idx_map silently drops that quad."""
+        from .pose_restraints import build_torsion_prior, PoseTorsionData
 
+        quads, allowed = build_torsion_prior(mol, n_conformers=n_conformers)
+        for (ai, aj, ak, al), allow in zip(quads, allowed):
+            if any(a not in idx_map for a in (ai, aj, ak, al)):
+                continue
+            li, lj, lk, ll = (idx_map[ai], idx_map[aj],
+                              idx_map[ak], idx_map[al])
+            pd = PoseTorsionData(allow, weight=w_torsion)
+            self.pose_data.append(pd)
+            self.register_site(atoms[li], lambda x, pd=pd: pd.setup(x, 0))
+            self.register_site(atoms[lj], lambda x, pd=pd: pd.setup(x, 1))
+            self.register_site(atoms[lk], lambda x, pd=pd: pd.setup(x, 2))
+            self.register_site(atoms[ll], lambda x, pd=pd: pd.setup(x, 3)) 
     def make_chiral_impl(
         self, ai: int, aj: list[int], mol, conf, atoms, invert: bool = False
     ) -> None:
@@ -335,10 +358,27 @@ class Restraints:
 
     def minimize(self, batch_crds_in: torch.Tensor, istep: int, sigma_t: float) -> None:
         """Minimize the restraints."""
-        if sigma_t > self.start_sigma:
+        if self.verbose:
+            print('=== sigma %d %.4f' % (istep, sigma_t))
+        if getattr(self, '_masked', None) is not None:
+            (self.chiral_data, self.bond_data,
+             self.angle_data, self.pose_data) = self._masked
+            self._masked = None
+        geom_on = sigma_t <= self.start_sigma
+        pose_on = sigma_t <= self.pose_start_sigma
+        if not geom_on and not pose_on:
             return
+        if not (geom_on and pose_on):
+            self._masked = (self.chiral_data, self.bond_data,
+                            self.angle_data, self.pose_data)
+            if not geom_on:
+                self.chiral_data = []
+                self.bond_data = []
+                self.angle_data = []
+            if not pose_on:
+                self.pose_data = []
 
-        if len(self.chiral_data) == 0 and len(self.bond_data) == 0:
+        if len(self.chiral_data) == 0 and len(self.bond_data) == 0 and len(self.pose_data) ==0:
             return
 
         if self.verbose:
@@ -421,6 +461,9 @@ class Restraints:
             for a in self.angle_data:
                 if a.is_valid():
                     ene += a.calc(crds[i])
+            for pd in self.pose_data:
+                if pd.is_valid():
+                    ene += pd.calc(crds[i])
         # print(f"calc: {ene=}")
         return ene
 
@@ -441,6 +484,9 @@ class Restraints:
             for a in self.angle_data:
                 if a.is_valid():
                     a.grad(crds[i], grad[i])
+            for pd in self.pose_data:
+                if pd.is_valid():
+                    pd.grad(crds[i], grad[i])
         grad = grad.reshape(-1)
         return grad
 
