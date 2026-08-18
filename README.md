@@ -96,6 +96,9 @@ mode:
 ```bash
 pip install -e .
 ```
+Paths in the analysis/ scripts are hard-coded to the PLINDER installation and
+scratch directories used for this work, and must be edited before reuse. The
+variables to change are defined at the top of each script.
 
 ## Notes
 
