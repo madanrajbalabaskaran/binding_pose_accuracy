@@ -29,12 +29,18 @@ dihedral from the nearest value in its allowed set, so any rotamer the ensemble
 actually visited incurs no penalty. The term acts only in the low-noise phase of
 reverse diffusion, controlled by a noise-level threshold.
 
+
 ## Usage
 
-Restraint behaviour is controlled from the ligand block of the input YAML:
+A complete input configuration looks like this:
 
 ```yaml
-- ligand:
+sequences:
+  - protein:
+      id: A
+      sequence: "<PROTEIN SEQUENCE>"
+      msa: <path to .a3m>
+  - ligand:
       id: B
       smiles: '<SMILES>'
       chiral_restraints: true
@@ -51,10 +57,20 @@ restraints_config:
   gpu: false
   verbose: true
 ```
+Two settings matter more than they appear to:
+
+`gpu: false` is required. The torsional term is implemented only on the CPU
+minimisation path, so setting this to `true` silently disables it while the
+published chirality, bond and angle restraints continue to run.
 
 SMILES strings must be written as single-quoted YAML scalars. Double-quoted
 scalars process backslash escape sequences and will silently corrupt
 stereochemistry-bearing SMILES.
+
+An optional `pose_start_sigma` key, set in the ligand block, allows the
+torsional term to fire at a different point in reverse diffusion from the
+published restraints. It defaults to `start_sigma` and can be omitted, as in the
+configurations used for the reported results.
 
 Run inference with:
 
