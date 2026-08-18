@@ -168,3 +168,5 @@ out/
 results/
 __pycache__/
 *.pyc
+*.save
+*.save.*
