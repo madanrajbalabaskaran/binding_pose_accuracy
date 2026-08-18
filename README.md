@@ -18,6 +18,17 @@ inherited from upstream and unmodified.
 | `configs/` | New | Inference configurations for the 5bzl and 8sge evaluation systems, one per condition |
 | `scripts/` | New | Evaluation pipeline: system selection, structure extraction, config generation, alignment and aggregation |
 
+## Method
+
+For each ligand, a 50-conformer ensemble is generated with RDKit's ETKDGv3
+embedding under a fixed random seed and minimised with the MMFF94 force field.
+The dihedral angle at each rotatable bond is recorded across the ensemble,
+giving a multi-modal set of observed torsion values per bond. During inference,
+the restraint penalises the squared circular deviation of each rotatable-bond
+dihedral from the nearest value in its allowed set, so any rotamer the ensemble
+actually visited incurs no penalty. The term acts only in the low-noise phase of
+reverse diffusion, controlled by a noise-level threshold.
+
 ## Usage
 
 Restraint behaviour is controlled from the ligand block of the input YAML:
@@ -26,8 +37,35 @@ Restraint behaviour is controlled from the ligand block of the input YAML:
 pose_w_torsion: 1
 pose_start_sigma: 1.0
 ```
+
+SMILES strings must be written as single-quoted YAML scalars. Double-quoted
+scalars process backslash escape sequences and will silently corrupt
+stereochemistry-bearing SMILES.
+
+Run inference with:
+
+```bash
+boltz predict configs/eval_8sge.yaml --seed 42 --diffusion_samples 5 \
+      --out_dir <output directory>
+```
+
+## Environment
+
+The torsional module requires:
+
+```
+python 3.11.5
+torch==2.8.0+cu128
+torch_cluster            # from the PyTorch Geometric wheel index
+rdkit
+```
+
 Later PyTorch versions caused segmentation faults on import. Install in editable
-mode (`pip install -e .`).
+mode:
+
+```bash
+pip install -e .
+```
 
 ## Notes
 
@@ -43,17 +81,11 @@ Licensed under the terms of the upstream `LICENSE`. The restraint-guided
 inference framework is the work of Ishitani and Moriwaki; the underlying model
 is Boltz-1 (Wohlwend et al., 2024).
 
+## References
 
+Ishitani, R. and Moriwaki, Y. (2025) 'Improving stereochemical limitations in
+protein–ligand complex structure prediction', *ACS Omega*, 10(46),
+pp. 56075–56084. doi:10.1021/acsomega.5c07675.
 
-
-
-Run inference with:
-
-```bash
-boltz predict configs/eval_8sge.yaml --seed 42 --diffusion_samples 5 \
-      --out_dir <output directory>
-```
-
-## Environment
-
-The torsional module requires:
+Wohlwend, J. et al. (2024) 'Boltz-1: democratizing biomolecular interaction
+modeling', *bioRxiv*. doi:10.1101/2024.11.19.624167.
